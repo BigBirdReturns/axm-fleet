@@ -1,0 +1,51 @@
+# Enforce the promises: the conformance tests and the four-beat demo
+# (Go cross-verification included) run on every push.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: axm-fleet
+
+      # One genesis checkout serves both roles: the kernel we install and
+      # the verifiers/go tree the demo's beat 4 builds. Pinned until the
+      # kernel is on PyPI (docs/ADOPTING.md §2); keep in sync with the pin
+      # in README.md.
+      - uses: actions/checkout@v4
+        with:
+          repository: BigBirdReturns/axm-genesis
+          ref: b3062773ca5ae80a365fb2e80ff8e08a58958376
+          path: axm-genesis
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Install kernel and spoke
+        run: |
+          python -m pip install --upgrade pip
+          pip install './axm-genesis[mldsa-compat]'
+          pip install -e './axm-fleet[dev]'
+
+      - name: Conformance tests
+        working-directory: axm-fleet
+        env:
+          AXM_GENESIS: ${{ github.workspace }}/axm-genesis
+        run: python -m pytest tests/ -v
+
+      - name: Four-beat demo
+        working-directory: axm-fleet
+        env:
+          AXM_GENESIS: ${{ github.workspace }}/axm-genesis
+        run: ./demo.sh
