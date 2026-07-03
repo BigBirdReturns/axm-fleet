@@ -107,6 +107,11 @@ ceiling). `axm-fleet` seals the *fleet lifecycle* (what is running, and how
 it got there). `axm-sfn` seals *hardware custody* (what the machine
 attested it actually did, TPM-bound). Same kernel, three record types.
 
+A show_spec's optional `fleet` section cites a node record shard from
+here, by `sh1_` id, per drone flying that show — a content address, never
+a live lookup or a code dependency in either direction. See
+[axm-show's README, "Fleet cross-reference"](https://github.com/BigBirdReturns/axm-show#fleet-cross-reference).
+
 A natural next step is a hardware-attestation capsule on fleet records —
 an `ext/attestation@1` table carrying the node's TPM quote at record time,
 following the conventions axm-sfn established (self-fingerprinting key
