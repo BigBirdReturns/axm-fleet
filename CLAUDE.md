@@ -86,9 +86,12 @@ a sibling `../axm-genesis` checkout, and skip cleanly if absent.
 - **axm-sfn** seals *hardware custody* (what the machine attested it did —
   TPM-bound session journals).
 
-Same kernel, three record types. A future `ext/attestation@1` capsule on
+Same kernel, three record types. A future `tpm-attestation@1` capsule on
 fleet records (node TPM quote at record time) should follow axm-sfn's
-conventions rather than inventing new ones.
+conventions (RFC 0006) rather than inventing new ones — the kernel seals it
+in one pass via `extra_content`/`extra_ext`. Note `tpm-attestation@1` (what
+hardware attested) is distinct from RFC 0005's `attestations@1` (when a
+shard existed).
 
 ## Working here
 

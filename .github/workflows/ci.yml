@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: BigBirdReturns/axm-genesis
-          ref: b3062773ca5ae80a365fb2e80ff8e08a58958376
+          ref: bdeb2ba07f83ff3fae07e5beb335034f4853a73f
           path: axm-genesis
 
       - uses: actions/setup-python@v5

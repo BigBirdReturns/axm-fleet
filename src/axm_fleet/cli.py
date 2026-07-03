@@ -11,10 +11,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import blake3
 import click
 
 from axm_verify.const import MALFORMED_SHARD_CODES
+from axm_verify.crypto import derive_shard_id
 from axm_verify.logic import verify_shard
 
 from .record_compile import compile_record
@@ -94,7 +94,7 @@ def history_cmd(pool: Path) -> None:
     for manifest_path in sorted(pool.glob("*/manifest.json")):
         shard_dir = manifest_path.parent
         manifest_bytes = manifest_path.read_bytes()
-        sid = "sh1_" + blake3.blake3(manifest_bytes).hexdigest()
+        sid = derive_shard_id(manifest_bytes)
         lineage_rows = []
         lineage_file = shard_dir / "ext" / "lineage@1.jsonl"
         if lineage_file.exists():
