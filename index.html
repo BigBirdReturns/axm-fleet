@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>axm-fleet · Fleet Lifecycle Spoke</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0e0e0f;
+    --bg2:       #141416;
+    --bg3:       #1a1a1d;
+    --border:    #2a2a2e;
+    --border2:   #3a3a3f;
+    --amber:     #c8a84b;
+    --amber-dim: #7a6530;
+    --amber-glow:#e8c870;
+    --platinum:  #b8b8c0;
+    --dim:       #8a8a98;
+    --text:      #d4d4dc;
+    --text-hi:   #eeeef4;
+    --red-dim:   #7a3535;
+    --green-dim: #2a5c3a;
+    --blue-dim:  #2a3a5c;
+    --mono:   'DM Mono', monospace;
+    --serif:  'Crimson Pro', Georgia, serif;
+    --display:'Bebas Neue', sans-serif;
+    --eco-bg:       #0e0e0f;
+    --eco-border:   #2a2a2e;
+    --eco-text:     #8a8a98;
+    --eco-text-hi:  #d4d4dc;
+    --eco-accent:   #c8a84b;
+    --eco-mono:     'DM Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--serif);
+    font-size: clamp(15px, 1.6vw, 18px);
+    line-height: 1.65;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRAIN ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+    pointer-events: none; z-index: 1000; opacity: 0.6;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse-amber {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(200,168,75,0); }
+    50%       { box-shadow: 0 0 20px 4px rgba(200,168,75,0.12); }
+  }
+  /* CRT scanlines — repeating bands, not a single bar */
+  @keyframes crt-scroll {
+    0%   { background-position: 0 0; }
+    100% { background-position: 0 -120px; }
+  }
+  @keyframes lo-fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-up  { animation: fadeUp 0.7s ease both; }
+  .delay-1     { animation-delay: 0.1s; }
+  .delay-2     { animation-delay: 0.2s; }
+  .delay-3     { animation-delay: 0.35s; }
+
+  /* ── LAYOUT ── */
+  .page-wrap { max-width: 1140px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    position: relative; overflow: hidden;
+  }
+
+  /* CRT scanline overlay on header only */
+  .header-scanline {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(200,168,75,0.03) 3px,
+      rgba(200,168,75,0.03) 4px
+    );
+    animation: crt-scroll 3s linear infinite;
+    pointer-events: none; z-index: 1;
+    opacity: 0.7;
+  }
+  /* Amber sweep line on top edge */
+  .header-scanline::after {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--amber) 40%, var(--amber-glow) 50%, var(--amber) 60%, transparent 100%);
+    opacity: 0.4;
+  }
+
+  .header-inner {
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: end; gap: 40px; padding: 60px 0 40px;
+    position: relative; z-index: 2;
+  }
+
+  .header-badge {
+    font-family: var(--mono); font-size: 10px; font-weight: 400;
+    letter-spacing: 0.18em; text-transform: uppercase; color: var(--amber);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .header-badge::before {
+    content: ''; display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--amber);
+    animation: pulse-amber 2.5s ease-in-out infinite;
+  }
+
+  h1 {
+    font-family: var(--display); font-size: clamp(40px, 10vw, 96px);
+    letter-spacing: clamp(0.02em, 0.4vw, 0.04em); line-height: 0.9;
+    color: var(--text-hi); text-transform: uppercase;
+  }
+  h1 .accent { color: var(--amber); }
+
+  .header-tagline {
+    font-family: var(--serif); font-style: italic; font-size: 19px;
+    color: var(--platinum); margin-top: 20px; max-width: 520px; line-height: 1.5;
+  }
+
+  .header-meta { text-align: right; }
+  .version-block {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--dim); line-height: 2; letter-spacing: 0.06em;
+  }
+  .version-block .val { color: var(--amber); }
+
+  /* ── NAV ── */
+  nav {
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 500;
+    background: var(--bg);
+  }
+  nav ul { display: flex; flex-wrap: wrap; list-style: none; gap: 0; }
+  nav a {
+    display: block; padding: 13px 18px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--dim); text-decoration: none;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid transparent;
+    transition: color 0.2s, background 0.2s; white-space: nowrap;
+  }
+  nav a:hover { color: var(--amber); background: rgba(200,168,75,0.04); }
+  nav a.active {
+    color: var(--amber);
+    background: rgba(200,168,75,0.12);
+    box-shadow: inset 0 -2px 0 var(--amber);
+  }
+
+  /* ── SECTIONS ── */
+  section {
+    padding: 72px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  section#manifesto {
+    padding: 100px 0 80px;
+  }
+
+  section#errors {
+    padding: 60px 0 100px;
+  }
+  section:last-of-type { border-bottom: none; }
+  .section-header { display: flex; align-items: baseline; gap: 20px; margin-bottom: 48px; }
+  .section-number {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--amber-dim); letter-spacing: 0.1em; flex-shrink: 0;
+  }
+  h2 {
+    font-family: var(--display); font-size: clamp(28px, 4vw, 44px);
+    letter-spacing: 0.06em; color: var(--text-hi);
+    text-transform: uppercase; line-height: 1;
+  }
+  h3 {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 12px; font-weight: 400;
+  }
+  p { color: var(--platinum); max-width: 680px; }
+
+  /* ── MANIFESTO ── */
+  .manifesto {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+    background: var(--border); border: 1px solid var(--border); margin-top: 40px;
+  }
+  .manifesto-item { background: var(--bg2); padding: 36px 32px; position: relative; }
+  .manifesto-item::before {
+    content: attr(data-num); position: absolute; top: 20px; right: 24px;
+    font-family: var(--display); font-size: 56px; color: var(--border2);
+    line-height: 1; pointer-events: none;
+  }
+  .manifesto-item p { font-size: 16px; line-height: 1.7; color: var(--text); max-width: none; position: relative; z-index: 1; }
+  .manifesto-item strong { color: var(--amber); font-weight: 600; }
+  .manifesto-item code { font-family: var(--mono); font-size: 13px; color: var(--amber); }
+
+  /* ── PRIMITIVES ── */
+  .primitives-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+    background: var(--border); border: 1px solid var(--border); margin-top: 16px;
+  }
+  .primitive-card {
+    background: var(--bg2); padding: 28px 28px 32px;
+    position: relative; overflow: hidden; transition: background 0.2s;
+  }
+  .primitive-card:hover { background: var(--bg3); }
+  .primitive-card::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+    background: var(--amber); transform: scaleX(0); transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+  .primitive-card:hover::after { transform: scaleX(1); }
+  .prim-icon { font-family: var(--mono); font-size: 22px; color: var(--amber); margin-bottom: 14px; display: block; }
+  .primitive-card h3 { font-size: 10px; margin-bottom: 10px; }
+  .primitive-card p { font-size: 14px; line-height: 1.6; color: var(--dim); max-width: none; }
+  .primitive-card code { font-family: var(--mono); font-size: 11px; color: var(--amber); background: rgba(200,168,75,0.08); padding: 1px 5px; border-radius: 2px; }
+
+  /* ── SHARD FORMAT ── */
+  .shard-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; margin-top: 16px; }
+  .shard-tree {
+    font-family: var(--mono); font-size: 13px; line-height: 2;
+    color: var(--dim); background: var(--bg2); border: 1px solid var(--border); padding: 28px 32px;
+  }
+  .shard-tree .dir    { color: var(--amber); }
+  .shard-tree .file   { color: var(--platinum); }
+  .shard-tree .ext    { color: var(--amber-dim); }
+  .shard-tree .comment{ color: #444450; font-size: 11px; }
+
+  .shard-fields { display: flex; flex-direction: column; gap: 16px; }
+  .shard-field { border-left: 2px solid var(--amber-dim); padding: 14px 20px; background: var(--bg2); }
+  .shard-field h3 { margin-bottom: 6px; }
+  .shard-field p { font-size: 14px; line-height: 1.6; color: var(--dim); max-width: none; }
+
+  .gold-callout {
+    margin-top: 24px; border: 1px solid var(--amber-dim);
+    background: rgba(200,168,75,0.04);
+    display: grid; grid-template-columns: auto 1fr;
+  }
+  .gold-accent { width: 4px; background: var(--amber); }
+  .gold-body { padding: 28px 32px; }
+  .gold-body h3 { font-family: var(--display); font-size: 22px; color: var(--amber-glow); letter-spacing: 0.08em; margin-bottom: 10px; font-weight: 400; }
+  .gold-body p { font-size: 15px; color: var(--platinum); line-height: 1.7; max-width: 600px; }
+  .gold-body code { font-family: var(--mono); font-size: 12px; color: var(--amber); background: rgba(200,168,75,0.1); padding: 2px 6px; }
+
+  /* ── CRYPTO SUITE TABLE ── */
+  .suite-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; margin-top: 24px; border: 1px solid var(--border); }
+  .suite-table th { background: var(--bg3); color: var(--amber); padding: 14px 20px; text-align: left; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 400; border-bottom: 1px solid var(--border); }
+  .suite-table td { padding: 16px 20px; border-bottom: 1px solid var(--border); color: var(--platinum); vertical-align: middle; }
+  .suite-table tr:last-child td { border-bottom: none; }
+  .suite-table tr:hover td { background: rgba(200,168,75,0.03); }
+
+  .badge { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; padding: 3px 8px; border-radius: 2px; text-transform: uppercase; }
+  .badge-stable { background: rgba(42,92,58,0.4); color: #6ebb8a; border: 1px solid #2a5c3a; }
+  .badge-pq     { background: rgba(42,58,92,0.4); color: #6a8abb; border: 1px solid var(--blue-dim); }
+
+  .domain-sep {
+    margin-top: 32px; padding: 24px 28px; background: var(--bg2);
+    border: 1px solid var(--border); border-left: 3px solid var(--amber);
+  }
+  .domain-sep h3 { margin-bottom: 10px; }
+  .domain-sep-body { font-family: var(--mono); font-size: 13px; line-height: 2.2; color: var(--dim); }
+  .domain-sep-body .lbl  { color: var(--amber); }
+  .domain-sep-body .byte { color: #6a8abb; }
+  .domain-sep-body .out  { color: #6ebb8a; }
+  .domain-sep-body .note { color: #444450; font-size: 11px; }
+
+  /* ── LAYER ONION ── */
+  #genesis-layers-onion { margin-top: 16px; }
+  .onion-wrap { display: grid; grid-template-columns: 420px 1fr; gap: 48px; align-items: start; }
+  .onion-left {}
+  .onion-svg { display: block; }
+  .onion-tabs { display: flex; gap: 1px; margin-top: 16px; background: var(--border2); border: 1px solid var(--border2); }
+  .onion-tab {
+    flex: 1; padding: 10px 8px; background: var(--bg2); border: none;
+    border-top: 2px solid transparent; color: #444450; font-size: 10px;
+    letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
+    transition: all 0.2s; font-family: var(--mono);
+  }
+  .onion-tab:hover { color: var(--dim); background: var(--bg3); }
+  .onion-tab.active { background: var(--bg3); }
+
+  .onion-detail {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-left: 3px solid var(--amber); padding: 28px; min-height: 340px;
+    animation: lo-fadeIn 0.2s ease both;
+  }
+  .od-eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 8px; }
+  .od-name { font-family: var(--display); font-size: 28px; letter-spacing: 0.06em; color: var(--text-hi); margin-bottom: 16px; line-height: 1; }
+  .od-desc { font-family: var(--serif); font-size: 16px; line-height: 1.7; color: var(--platinum); margin-bottom: 20px; max-width: none; }
+  .od-examples-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: #444450; text-transform: uppercase; margin-bottom: 10px; }
+  .od-example { font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 2.1; padding-left: 12px; border-left: 1px solid var(--border); margin-bottom: 2px; }
+  .od-genesis-box { background: rgba(200,168,75,0.05); border: 1px solid rgba(200,168,75,0.15); padding: 14px 16px; margin-top: 16px; }
+  .od-genesis-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: var(--amber); text-transform: uppercase; margin-bottom: 6px; }
+  .od-genesis-text  { font-family: var(--mono); font-size: 13px; color: #8a8a90; line-height: 1.6; }
+
+  /* ── VERIFICATION PIPELINE ── */
+  .verify-steps { margin-top: 24px; border: 1px solid var(--border); }
+  .verify-step { display: grid; grid-template-columns: 56px 1fr; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+  .verify-step:last-child { border-bottom: none; }
+  .verify-step:hover { background: rgba(200,168,75,0.025); }
+  .step-num { display: flex; align-items: center; justify-content: center; background: var(--bg3); border-right: 1px solid var(--border); font-family: var(--display); font-size: 20px; color: var(--amber-dim); flex-shrink: 0; }
+  .step-body { padding: 20px 24px; }
+  .step-body h3 { font-size: 10px; margin-bottom: 6px; }
+  .step-body p { font-size: 14px; line-height: 1.6; color: var(--dim); max-width: none; }
+  .step-body code { font-family: var(--mono); font-size: 12px; color: var(--amber); }
+
+  /* ── CONFORMANCE / ERROR TABLES ── */
+  .req-table, .error-table {
+    width: 100%; border-collapse: collapse; margin-top: 24px;
+    border: 1px solid var(--border); font-size: 14px;
+  }
+  .req-table th, .error-table th {
+    background: var(--bg3); color: var(--amber); padding: 12px 20px; text-align: left;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    font-weight: 400; border-bottom: 1px solid var(--border);
+  }
+  .req-table td, .error-table td { padding: 14px 20px; border-bottom: 1px solid var(--border); color: var(--platinum); vertical-align: top; line-height: 1.6; }
+  .req-table tr:last-child td, .error-table tr:last-child td { border-bottom: none; }
+  .req-table tr:hover td, .error-table tr:hover td { background: rgba(200,168,75,0.025); }
+  .req-id    { font-family: var(--mono); font-size: 12px; color: var(--amber); white-space: nowrap; font-weight: 500; }
+  .req-codes { font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 1.8; }
+  .error-code { font-family: var(--mono); font-size: 12px; color: var(--amber); white-space: nowrap; }
+  .error-desc { color: var(--dim); font-size: 14px; }
+  .error-group th { background: var(--bg); color: var(--border2); font-size: 9px; padding: 8px 20px; letter-spacing: 0.18em; }
+
+  /* ── QUICK START ── */
+  .quickstart-block { background: var(--bg2); border: 1px solid var(--border); margin-top: 24px; overflow: hidden; }
+  .qs-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--bg3); }
+  .qs-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+  .qs-badge { font-family: var(--mono); font-size: 10px; color: var(--amber-dim); letter-spacing: 0.06em; }
+  .qs-body { padding: 20px 24px; font-family: var(--mono); font-size: 13px; line-height: 2.1; color: var(--dim); overflow-x: auto; }
+  .qs-body .prompt { color: var(--amber-dim); user-select: none; }
+  .qs-body .cmd    { color: var(--platinum); }
+  .qs-body .arg    { color: var(--amber); }
+  .qs-body .comment{ color: #444450; }
+  .qs-body .output { color: #4a7a5a; }
+
+  /* ── FOOTER ── */
+  footer { border-top: 1px solid var(--border); padding: 40px 0; }
+  .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .footer-left { font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 2; letter-spacing: 0.06em; }
+  .footer-left strong { color: var(--amber); font-weight: 500; }
+  .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+  .footer-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-decoration: none; text-transform: uppercase; transition: color 0.2s; }
+  .footer-links a:hover { color: var(--amber); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .page-wrap { padding: 0 20px; }
+    .header-inner { grid-template-columns: 1fr; gap: 24px; padding: 40px 0 28px; }
+    .header-meta { text-align: left; margin-top: 20px; }
+    .manifesto { grid-template-columns: 1fr; }
+    .primitives-grid { grid-template-columns: repeat(2, 1fr); }
+    .shard-layout { grid-template-columns: 1fr; }
+    .onion-wrap { grid-template-columns: 1fr; }
+    .onion-svg { max-width: 340px; }
+  }
+  @media (max-width: 580px) {
+    body { font-size: 15px; }
+    .primitives-grid { grid-template-columns: 1fr; }
+    h1 { font-size: clamp(36px, 10vw, 56px); }
+    .header-inner { padding: 28px 0 20px; }
+    .section-header h2 { font-size: clamp(20px, 5vw, 28px); }
+    .version-block { font-size: 10px; }
+    nav ul { gap: 0; }
+    nav a { font-size: 10px; padding: 10px 8px; }
+  }
+</style>
+</head>
+<body>
+<!--
+  AXM Ecosystem Nav — shared across all pages
+
+  USAGE: Paste this block at the top of <body> in each page.
+  Set data-active to the current page's key.
+
+  The nav reads CSS custom properties from the host page:
+    --eco-bg       (fallback: #0e0e0f)
+    --eco-border   (fallback: #2a2a2e)
+    --eco-text     (fallback: #666)
+    --eco-text-hi  (fallback: #e0e0e0)
+    --eco-accent   (fallback: #c8a84b)
+    --eco-mono     (fallback: 'DM Mono', monospace)
+
+  Each page sets these in its :root {} to match its palette.
+-->
+<style>
+.eco-nav {
+  position: relative;
+  z-index: 900;
+  background: var(--eco-bg, #0e0e0f);
+  border-bottom: 1px solid var(--eco-border, #2a2a2e);
+  font-family: var(--eco-mono, 'DM Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  user-select: none;
+}
+.eco-nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  gap: 6px;
+}
+.eco-nav-brand {
+  color: var(--eco-text, #666);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-right: 12px;
+  white-space: nowrap;
+}
+.eco-nav-brand strong {
+  color: var(--eco-text-hi, #e0e0e0);
+  font-weight: 500;
+}
+.eco-nav-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--eco-border, #2a2a2e);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+.eco-nav a {
+  color: var(--eco-text, #666);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  position: relative;
+}
+.eco-nav a:hover {
+  color: var(--eco-text-hi, #e0e0e0);
+  background: rgba(255,255,255,0.03);
+}
+.eco-nav a.eco-active {
+  color: var(--eco-accent, #c8a84b);
+}
+.eco-nav a.eco-active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+  background: var(--eco-accent, #c8a84b);
+  opacity: 0.6;
+}
+.eco-nav-kind {
+  font-size: 8px;
+  opacity: 0.5;
+  display: inline-block;
+  margin-left: 2px;
+  vertical-align: top;
+}
+.eco-nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.eco-nav-github {
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+.eco-nav-github:hover {
+  opacity: 0.8;
+}
+@media (max-width: 768px) {
+  .eco-nav-inner {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .eco-nav-inner::-webkit-scrollbar { display: none; }
+  .eco-nav a { padding: 6px 7px; font-size: 9px; }
+  .eco-nav-brand { display: none; }
+}
+</style>
+
+<div class="eco-nav" data-active="fleet">
+  <div class="eco-nav-inner">
+    <div class="eco-nav-brand"><strong>AXM</strong> &nbsp;Protocol</div>
+    <div class="eco-nav-sep"></div>
+    <a href="https://bigbirdreturns.github.io/axm-genesis/" data-page="genesis">Genesis<span class="eco-nav-kind"> kernel</span></a>
+    <a href="https://bigbirdreturns.github.io/axm-core/" data-page="core">Core<span class="eco-nav-kind"> hub</span></a>
+    <div class="eco-nav-sep"></div>
+    <a href="https://bigbirdreturns.github.io/axm-chat/" data-page="chat">Chat<span class="eco-nav-kind"> spoke</span></a>
+    <a href="https://bigbirdreturns.github.io/axm-show/" data-page="show">Show<span class="eco-nav-kind"> spoke</span></a>
+    <a href="https://bigbirdreturns.github.io/axm-embodied/" data-page="embodied">Embodied<span class="eco-nav-kind"> spoke</span></a>
+    <a href="https://bigbirdreturns.github.io/axm-fleet/" data-page="fleet">Fleet<span class="eco-nav-kind"> spoke</span></a>
+    <a href="https://bigbirdreturns.github.io/axm-sfn/" data-page="sfn">SFN<span class="eco-nav-kind"> spoke</span></a>
+    <div class="eco-nav-right">
+      <a href="https://github.com/BigBirdReturns" class="eco-nav-github" target="_blank" title="GitHub">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+// Auto-highlight active page based on data-active attribute
+(function() {
+  const nav = document.querySelector('.eco-nav');
+  if (!nav) return;
+  const active = nav.dataset.active;
+  if (active) {
+    const link = nav.querySelector(`[data-page="${active}"]`);
+    if (link) link.classList.add('eco-active');
+  }
+})();
+</script>
+
+
+<header>
+  <div class="header-scanline"></div>
+  <div class="page-wrap">
+    <div class="header-inner">
+      <div class="animate-up">
+        <div class="header-badge">AXM Ecosystem · Fleet Lifecycle Spoke</div>
+        <h1>AXM <span class="accent">Fleet</span></h1>
+        <p class="header-tagline">Seal what is running on a deployed asset — who built it, who signed it, what it contains, when it changed, and what key authorized it. Proven offline, with no vendor infrastructure in the loop.</p>
+      </div>
+      <div class="header-meta animate-up delay-2">
+        <div class="version-block">
+          <div>SPOKE <span class="val">lifecycle</span></div>
+          <div>KERNEL <span class="val">axm-genesis 1.0.0rc1</span></div>
+          <div>SUITE <span class="val">axm-hybrid1</span></div>
+          <div>RECORD <span class="val">node_record.json</span></div>
+          <div>VERSION <span class="val">v0.1.0</span></div>
+          <div>LICENSE <span class="val">Apache-2.0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav id="main-nav">
+  <div class="page-wrap">
+    <ul>
+      <li><a href="#seals"     data-section="seals">What It Seals</a></li>
+      <li><a href="#record"    data-section="record">Node Record</a></li>
+      <li><a href="#demo"      data-section="demo">Four-Beat Demo</a></li>
+      <li><a href="#records"   data-section="records">Record Types</a></li>
+      <li><a href="#roadmap"   data-section="roadmap">Roadmap</a></li>
+      <li><a href="#quickstart" data-section="quickstart">Quick Start</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- §01 WHAT FLEET SEALS -->
+<section id="seals">
+  <div class="page-wrap">
+    <div class="section-header animate-up">
+      <span class="section-number">§ 01</span>
+      <h2>What Fleet Seals</h2>
+    </div>
+    <p class="animate-up delay-1">Fleet turns a fleet sustainment record — <code style="font-family:var(--mono);font-size:14px;color:var(--amber)">node_record.json</code> — into a shard compiled, signed, and sealed by the axm-genesis kernel. One record shard is a self-contained, offline-verifiable answer for one asset at one moment. The chain of shards is the asset's lifecycle.</p>
+    <div class="manifesto animate-up delay-2">
+      <div class="manifesto-item" data-num="I">
+        <p><strong>Lifecycle is a supersedes chain.</strong> An update is not an edit — it is a <strong>new</strong> shard that supersedes the previous one. The kernel seals <code>manifest.supersedes</code> and <code>ext/lineage&#64;1.jsonl</code>; <code>axm-fleet history</code> walks the chain from any shard back to first fielding.</p>
+      </div>
+      <div class="manifesto-item" data-num="II">
+        <p><strong>Records are succeeded, never mutated.</strong> A record is sealed once and never touched again. Deploy, patch, rollback, recovery — each is its own shard, and the sequence over time <em>is</em> the sustainment history. Nothing in the past can be quietly rewritten.</p>
+      </div>
+      <div class="manifesto-item" data-num="III">
+        <p><strong>Identity is derived, never stored.</strong> A shard's identity is <code>sh1_</code> + BLAKE3 of the manifest bytes. There is no <code>shard_id</code> field. Same record + same key + fixed <code>--created-at</code> → byte-identical manifest and identical <code>sh1_</code> id.</p>
+      </div>
+      <div class="manifesto-item" data-num="IV">
+        <p><strong>Genesis compiles and signs; everything else reads.</strong> The spoke owns only domain extraction (<code>record_schema.py</code>, <code>record_compile.py</code>) and its CLI. It never implements signing, hashing, Merkle construction, or resealing. Suite: <code>axm-hybrid1</code> — Ed25519 ‖ ML-DSA-44.</p>
+      </div>
+    </div>
+    <div class="gold-callout animate-up delay-3">
+      <div class="gold-accent"></div>
+      <div class="gold-body">
+        <h3>Trust anchored out of band</h3>
+        <p>Verification never trusts the <code>publisher.pub</code> embedded in the shard being verified. Trust is anchored to a public key supplied out of band — escrowed, published, sealed in an offline ceremony. Verification needs no transparency log, no network, and no reference implementation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- §02 NODE RECORD -->
+<section id="record">
+  <div class="page-wrap">
+    <div class="section-header animate-up">
+      <span class="section-number">§ 02</span>
+      <h2>The Node Record</h2>
+    </div>
+    <p class="animate-up delay-1">The record document itself becomes the sealed <code style="font-family:var(--mono);font-size:14px;color:var(--amber)">content/source.txt</code>; every claim cites a byte span of it. The record's digests bind the external artifacts — the shard seals the record, and the record's hashes pin the image, SBOM, provenance statement, models, and firmware by sha256 content address.</p>
+    <div class="shard-layout animate-up delay-2">
+      <div>
+        <div class="shard-tree">
+          <div><span class="file">node_record.json</span> <span class="comment">← becomes content/source.txt</span></div>
+          <div>&nbsp;&nbsp;<span class="dir">asset</span> <span class="comment">← the physical node</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">asset_id · platform</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">program · compute_module</span></div>
+          <div>&nbsp;&nbsp;<span class="dir">image</span> <span class="comment">← deployed image + supply chain</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">image_digest</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">sbom_digest · provenance_digest</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">signing_key_id · builder</span></div>
+          <div>&nbsp;&nbsp;<span class="dir">components</span> <span class="comment">← pinned models + firmware</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">version + digest, each</span></div>
+          <div>&nbsp;&nbsp;<span class="dir">event</span> <span class="comment">← why this record exists</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">event_type · event_time_utc</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="ext">authorized_by</span></div>
+        </div>
+        <div class="gold-callout">
+          <div class="gold-accent"></div>
+          <div class="gold-body">
+            <h3>Honest Evidence</h3>
+            <p>The digests in <code>examples/*.json</code> are the real sha256 of the files in <code>examples/artifacts/</code>. The test <code>test_artifact_digests_bind</code> enforces it on every push — change an artifact without regenerating its digest and the build fails.</p>
+          </div>
+        </div>
+      </div>
+      <div class="shard-fields">
+        <div class="shard-field">
+          <h3>asset</h3>
+          <p>What physical node this describes: <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">asset_id</code>, <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">platform</code>, <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">program</code>, <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">compute_module</code> — the substitutable surface a rehost changes (e.g. <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">node-0042</code> · <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">som-vendor-a</code>).</p>
+        </div>
+        <div class="shard-field">
+          <h3>image</h3>
+          <p>The deployed image and its supply-chain digests: image, SBOM (<code style="font-family:var(--mono);font-size:12px;color:var(--amber)">spdx-2.3</code>), and SLSA provenance — each by sha256 content address — plus the <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">signing_key_id</code> and <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">builder</code> that produced it.</p>
+        </div>
+        <div class="shard-field">
+          <h3>components</h3>
+          <p>Pinned models and firmware, each carrying a <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">version</code> and a sha256 <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">digest</code> — the exact detect-model and autopilot firmware running on the node.</p>
+        </div>
+        <div class="shard-field">
+          <h3>event</h3>
+          <p>Why this record exists: <code style="font-family:var(--mono);font-size:12px;color:var(--amber)">deploy | patch | rollback | recovery</code>, when (<code style="font-family:var(--mono);font-size:12px;color:var(--amber)">event_time_utc</code>), and who authorized it (<code style="font-family:var(--mono);font-size:12px;color:var(--amber)">authorized_by</code>).</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:40px;">
+      <h3 style="margin-bottom:8px;">Claim Tiers</h3>
+      <p class="animate-up" style="font-size:15px;">Every claim in the shard carries a tier assigned at extraction time by which part of the record it comes from — a semantic distinction, not configuration.</p>
+      <table class="req-table">
+        <thead>
+          <tr><th>Tier</th><th>Source</th><th>Claims</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="req-id">Tier 0</td>
+            <td>digests, key id</td>
+            <td class="error-desc">Integrity facts — content addresses of image / SBOM / provenance / components, and the signing key id. Facts, not choices.</td>
+          </tr>
+          <tr>
+            <td class="req-id">Tier 1</td>
+            <td>configuration</td>
+            <td class="error-desc">Build id, versions, platform, compute module — the surface a rehost changes.</td>
+          </tr>
+          <tr>
+            <td class="req-id">Tier 2</td>
+            <td>event</td>
+            <td class="error-desc">What happened, when, and authorized by whom.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- §03 FOUR-BEAT DEMO -->
+<section id="demo">
+  <div class="page-wrap">
+    <div class="section-header animate-up">
+      <span class="section-number">§ 03</span>
+      <h2>The Four-Beat Demo</h2>
+    </div>
+    <p class="animate-up delay-1"><code style="font-family:var(--mono);font-size:14px;color:var(--amber)">./demo.sh</code> is the product. CI runs it on every push — every claim below is a runnable command with a real, observable result, not a promise. Throwaway keypairs are generated per run; a hardcoded key would be a regression.</p>
+    <div class="verify-steps animate-up delay-2">
+      <div class="verify-step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Record</h3>
+          <p><code>axm-fleet record examples/node-0042.deploy.json pool/deploy --key publisher.key</code> compiles the deploy record and prints the derived <code>sh1_</code> identity. Then <code>axm-verify shard pool/deploy --trusted-key publisher.pub</code> verifies it offline against a key supplied out of band → <span style="color:#6ebb8a;">PASS</span>.</p>
+        </div>
+      </div>
+      <div class="verify-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Patch</h3>
+          <p>Compile a successor with <code>--supersedes sh1_&lt;deploy-id&gt;</code>. The kernel seals the lineage — it emits <code>manifest.supersedes</code> and <code>ext/lineage&#64;1.jsonl</code>. <code>axm-fleet history pool/</code> walks the chain from the patch back to the deploy.</p>
+        </div>
+      </div>
+      <div class="verify-step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Tamper</h3>
+          <p>Flip one sealed byte in <code>content/source.txt</code> → <code>E_MERKLE_MISMATCH</code>. Verify the untampered shard against the wrong trusted key → <code>E_SIG_INVALID</code>. There is no escape hatch; either failure halts the pipeline.</p>
+        </div>
+      </div>
+      <div class="verify-step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>Remove the Vendor</h3>
+          <p>Verify the same shard with the independent Go verifier in axm-genesis (<code>verifiers/go</code>), built from the spec and vectors alone. <code>axm-verify-go shard pool/patch --trusted-key publisher.pub</code> → <span style="color:#6ebb8a;">PASS</span>. Remove the reference implementation and the record still proves out — the record layer passes its own substitution test.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="quickstart-block animate-up delay-3">
+      <div class="qs-header">
+        <span class="qs-title">./demo.sh — condensed run</span>
+        <span class="qs-badge">bash · CI on every push</span>
+      </div>
+      <div class="qs-body">
+        <div><span class="comment"># beat 4 needs a Go toolchain and an axm-genesis checkout:</span></div>
+        <div><span class="prompt">$ </span><span class="cmd">AXM_GENESIS=/path/to/axm-genesis ./demo.sh</span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment">== 1. RECORD ==</span></div>
+        <div><span class="output">deploy record: sh1_&hellip;</span></div>
+        <div><span class="output">{"shard":"&hellip;","status":"PASS","error_count":0,"errors":[]}</span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment">== 2. PATCH — kernel seals the lineage ==</span></div>
+        <div><span class="output">patch record:  sh1_&hellip;</span></div>
+        <div><span class="cmd">--- ext/lineage&#64;1.jsonl · --- chain:</span> <span class="output">history walks deploy → patch</span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment">== 3. TAMPER ==</span></div>
+        <div><span class="arg">(FAIL as required — E_MERKLE_MISMATCH)</span></div>
+        <div><span class="arg">(FAIL as required — E_SIG_INVALID)</span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment">== 4. REMOVE THE VENDOR — independent Go verifier ==</span></div>
+        <div><span class="output">(second implementation, built from the spec alone: PASS)</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- §04 THREE RECORD TYPES -->
+<section id="records">
+  <div class="page-wrap">
+    <div class="section-header animate-up">
+      <span class="section-number">§ 04</span>
+      <h2>Three Record Types</h2>
+    </div>
+    <p class="animate-up delay-1">Same kernel, three spokes, three record types. Genesis compiles and signs all of them; each spoke owns only its own domain extraction. Fleet is the one that seals lifecycle over time.</p>
+    <table class="suite-table animate-up delay-2">
+      <thead>
+        <tr>
+          <th>Spoke</th>
+          <th>Seals</th>
+          <th>Record</th>
+          <th>Shape</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--amber)">axm-show</td>
+          <td>Mission authorization — what may fly, under which ceiling</td>
+          <td style="font-family:var(--mono);font-size:11px;">show_spec.json</td>
+          <td><span class="badge badge-stable">One-shot</span></td>
+        </tr>
+        <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--amber-glow)">axm-fleet</td>
+          <td>Lifecycle — what is running, and how it got there</td>
+          <td style="font-family:var(--mono);font-size:11px;">node_record.json</td>
+          <td><span class="badge badge-pq">Supersedes chain</span></td>
+        </tr>
+        <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--amber)">axm-sfn</td>
+          <td>Hardware custody — what the machine attested it did</td>
+          <td style="font-family:var(--mono);font-size:11px;">session journal</td>
+          <td><span class="badge badge-stable">TPM-bound</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="domain-sep animate-up delay-3">
+      <h3>Cross-reference, never a live lookup</h3>
+      <div class="domain-sep-body">
+        <div><span class="lbl">show_spec</span> may cite a fleet node record shard by <span class="out">sh1_</span> id — one per drone flying that show.</div>
+        <div><span class="lbl">binding</span> &nbsp;is a content address, <span class="note">never a network call or a code dependency in either direction.</span></div>
+        <div><span class="lbl">result</span> &nbsp;&nbsp;the mission authorization pins exactly what was running on each asset it authorized.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- §05 ROADMAP -->
+<section id="roadmap">
+  <div class="page-wrap">
+    <div class="section-header animate-up">
+      <span class="section-number">§ 05</span>
+      <h2>Roadmap</h2>
+    </div>
+    <p class="animate-up delay-1">A natural next step — aspirational, not yet implemented — is a hardware-attestation capsule on fleet records, following the conventions axm-sfn already established rather than inventing new ones.</p>
+    <div class="gold-callout animate-up delay-2">
+      <div class="gold-accent"></div>
+      <div class="gold-body">
+        <h3>tpm-attestation&#64;1 (RFC 0006)</h3>
+        <p>A capsule carrying the node's TPM quote at record time — self-fingerprinting key rows, algorithm-tagged signature rows, blobs indexed into <code>content/</code>, everything recomputable from the shard alone. The kernel would seal it in one pass via <code>extra_content</code>/<code>extra_ext</code>; the claim outlives the TPM's cryptography. This <code>tpm-attestation&#64;1</code> (<em>what hardware</em> attested) is distinct from RFC 0005's <code>attestations&#64;1</code> (<em>when</em> a shard existed).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- §06 QUICK START -->
+<section id="quickstart">
+  <div class="page-wrap">
+    <div class="section-header animate-up">
+      <span class="section-number">§ 06</span>
+      <h2>Quick Start</h2>
+    </div>
+    <div class="quickstart-block animate-up delay-1">
+      <div class="qs-header">
+        <span class="qs-title">Install + Record + Verify</span>
+        <span class="qs-badge">bash</span>
+      </div>
+      <div class="qs-body">
+        <div><span class="comment"># The kernel. Pin the exact commit until axm-genesis is on PyPI.</span></div>
+        <div><span class="prompt">$ </span><span class="cmd">pip install <span class="arg">'axm-genesis[mldsa-compat] @ git+https://github.com/BigBirdReturns/axm-genesis@fffe7cf0f1c78c8c4bea5f303099db80f7c53ba3'</span></span></div>
+        <div><span class="prompt">$ </span><span class="cmd">pip install -e <span class="arg">.</span></span> <span class="comment"># this spoke</span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment"># A throwaway or offline-ceremony publisher identity — never a default key.</span></div>
+        <div><span class="prompt">$ </span><span class="cmd">axm-build keygen <span class="arg">/secure/axm-keys</span> --name <span class="arg">publisher</span></span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment"># Deploy: the first record for an asset. Prints the derived sh1_ id.</span></div>
+        <div><span class="prompt">$ </span><span class="cmd">axm-fleet record <span class="arg">examples/node-0042.deploy.json pool/deploy</span> \</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmd">--key <span class="arg">/secure/axm-keys/publisher.key</span></span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment"># Patch: a successor record; the kernel seals the lineage.</span></div>
+        <div><span class="prompt">$ </span><span class="cmd">axm-fleet record <span class="arg">examples/node-0042.patch.json pool/patch</span> \</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmd">--key <span class="arg">/secure/axm-keys/publisher.key</span> --supersedes <span class="arg">sh1_&lt;deploy-id&gt;</span></span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment"># Audit: offline, out-of-band trust anchor. Then walk the chain.</span></div>
+        <div><span class="prompt">$ </span><span class="cmd">axm-verify shard <span class="arg">pool/patch</span> --trusted-key <span class="arg">/secure/axm-keys/publisher.pub</span></span></div>
+        <div><span class="prompt">$ </span><span class="cmd">axm-fleet history <span class="arg">pool/</span></span></div>
+      </div>
+    </div>
+    <div class="quickstart-block animate-up delay-2" style="margin-top:16px;">
+      <div class="qs-header">
+        <span class="qs-title">Run the test suite</span>
+        <span class="qs-badge">pytest · 9 tests</span>
+      </div>
+      <div class="qs-body">
+        <div><span class="prompt">$ </span><span class="cmd">python -m pytest <span class="arg">tests/</span> -v</span> <span class="comment"># Go test skips without a toolchain</span></div>
+        <div><span class="output">test_fleet_roundtrip .............................. PASSED</span></div>
+        <div><span class="output">test_artifact_digests_bind ........................ PASSED</span></div>
+        <div>&nbsp;</div>
+        <div><span class="comment"># The spoke does not check kernel requirements itself — the kernel</span></div>
+        <div><span class="comment"># verifier runs against the spoke's own output: the tamper roundtrip,</span></div>
+        <div><span class="comment"># the wrong-trusted-key case, the supersede/lineage chain, artifact-</span></div>
+        <div><span class="comment"># digest binding, reproducible builds, and cross-verification by the</span></div>
+        <div><span class="comment"># independent Go verifier.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="page-wrap">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <div><strong>axm-fleet</strong> v0.1.0 · Apache-2.0</div>
+        <div>Depends on axm-genesis &ge;1.0.0rc1,&lt;2 (the frozen v1 kernel)</div>
+        <div>Hybrid post-quantum suite axm-hybrid1 (Ed25519 ‖ ML-DSA-44)</div>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/BigBirdReturns/axm-fleet">GitHub</a>
+        <a href="https://bigbirdreturns.github.io/axm-genesis/">AXM Genesis</a>
+        <a href="#demo">Four-Beat Demo</a>
+        <a href="#quickstart">Quick Start</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ── Scroll-tracking nav ──────────────────────────────────────────
+(function(){
+  const navLinks = document.querySelectorAll('#main-nav a[data-section]');
+  const sections = Array.from(document.querySelectorAll('section[id]'));
+  const navH = document.getElementById('main-nav').offsetHeight;
+
+  function updateNav(){
+    let current = sections[0].id;
+    for(const s of sections){
+      if(s.getBoundingClientRect().top <= navH + 32) current = s.id;
+    }
+    navLinks.forEach(a => {
+      a.classList.toggle('active', a.dataset.section === current);
+    });
+  }
+
+  window.addEventListener('scroll', updateNav, {passive:true});
+  updateNav();
+})();
+</script>
+</body>
+</html>

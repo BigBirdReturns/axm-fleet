@@ -31,11 +31,10 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-import blake3
-
 from axm_build.common import normalize_source_text
 from axm_build.compiler_generic import CompilerConfig, compile_generic_shard
 from axm_build.sign import HYBRID1_SK_LEN
+from axm_verify.crypto import derive_shard_id
 
 from axm_fleet.record_schema import validate_node_record
 
@@ -261,4 +260,4 @@ def compile_record(
             raise RuntimeError(f"Shard failed kernel self-verification: {out_path}")
 
     manifest_bytes = (out_path / "manifest.json").read_bytes()
-    return "sh1_" + blake3.blake3(manifest_bytes).hexdigest()
+    return derive_shard_id(manifest_bytes)

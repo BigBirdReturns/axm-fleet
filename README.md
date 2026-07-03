@@ -69,7 +69,7 @@ sample artifacts whose digests the example records actually match
 # The kernel. Until axm-genesis is on PyPI, pin the commit you build
 # against (docs/ADOPTING.md §2); after the v1.0.0 release, use the
 # semver range axm-genesis[mldsa-compat]>=1.0.0,<2.
-pip install 'axm-genesis[mldsa-compat] @ git+https://github.com/BigBirdReturns/axm-genesis@b3062773ca5ae80a365fb2e80ff8e08a58958376'
+pip install 'axm-genesis[mldsa-compat] @ git+https://github.com/BigBirdReturns/axm-genesis@fffe7cf0f1c78c8c4bea5f303099db80f7c53ba3'
 pip install -e .                        # this spoke
 
 axm-build keygen /secure/axm-keys --name publisher   # once, offline
@@ -113,11 +113,14 @@ a live lookup or a code dependency in either direction. See
 [axm-show's README, "Fleet cross-reference"](https://github.com/BigBirdReturns/axm-show#fleet-cross-reference).
 
 A natural next step is a hardware-attestation capsule on fleet records —
-an `ext/attestation@1` table carrying the node's TPM quote at record time,
-following the conventions axm-sfn established (self-fingerprinting key
-rows, algorithm-tagged signature rows, everything recomputable from the
-shard alone). The kernel seals it; the claim outlives the TPM's
-cryptography.
+a `tpm-attestation@1` table (RFC 0006) carrying the node's TPM quote at
+record time, following the conventions axm-sfn established: self-
+fingerprinting key rows, algorithm-tagged signature rows, blobs indexed
+into `content/`, everything recomputable from the shard alone. The kernel
+seals it in one pass (`extra_content`/`extra_ext`); the claim outlives the
+TPM's cryptography. That `tpm-attestation@1` is distinct from RFC 0005's
+`attestations@1`, which anchors *when* a shard existed rather than *what
+hardware* attested it.
 
 ## Version
 
